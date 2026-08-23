@@ -388,3 +388,61 @@ jobs:
       - name: Publish to npm
         if: steps.check.outputs.already_published == 'false'
         run: npm publish --provenance --workspace=packages/credential-verification
+
+  # agent-signing's own publish path — same simpler, ungated shape as
+  # credential-verification's above (no consuming repo with a merged
+  # consumer contract test yet; add the same three-job gate contracts uses
+  # once one exists, don't leave it ungated out of inertia). No dependency
+  # on @fence.dev/contracts, but built via the full workspace build anyway
+  # for consistency with the pattern above.
+  #
+  # Bootstrap note, same as contracts'/credential-verification's own
+  # history: npm's Trusted Publisher can only be configured against a
+  # package version that already exists on the registry, so v0.1.0 must be
+  # published manually (an authenticated human `npm publish`, with 2FA)
+  # before this job's OIDC flow can take over for v0.1.1 onward. Not done
+  # yet — see this package's own README.
+  publish-agent-signing:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm's OIDC Trusted Publisher exchange + provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Update npm
+        # zizmor: ignore[adhoc-packages] deliberate — see the identical
+        # step's comment in the `publish` job above.
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check whether this version is already published
+        id: check
+        run: |
+          VERSION=$(node -p "require('./packages/agent-signing/package.json').version")
+          if npm view "@fence.dev/agent-signing@$VERSION" version >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::@fence.dev/agent-signing@$VERSION is already published — nothing to do"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        if: steps.check.outputs.already_published == 'false'
+        run: npm run build
+
+      - name: Publish to npm
+        if: steps.check.outputs.already_published == 'false'
+        run: npm publish --provenance --workspace=packages/agent-signing

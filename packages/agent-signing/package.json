@@ -1,0 +1,40 @@
+{
+  "name": "@fence.dev/agent-signing",
+  "version": "0.1.0",
+  "description": "Sign an agent's outbound HTTP requests per RFC 9421 / the Web Bot Auth draft's exact wire conventions — the interop signer half of Fence's M·1 agent-signing story. Signer-only: never parses or verifies a third-party signature.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fencedotdev/packages.git",
+    "directory": "packages/agent-signing"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "http-message-sig": "^0.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "http-message-signatures": "^1.0.6"
+  }
+}
