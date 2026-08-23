@@ -60,6 +60,9 @@ dist
 # CodeGraph local index — not source code
 .codegraph/
 
+# Claude Code worktree-isolated agent scratch dirs — never source code
+.claude/worktrees/
+
 # Playwright (if used by console or sandbox for e2e)
 /test-results/
 /playwright-report/
