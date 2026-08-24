@@ -14,14 +14,14 @@ on:
 # a real Dockerfile/schema to exist first and get added per-repo once that repo
 # has application code, not at template-creation time.
 #
-# Runs on GitHub-hosted ubuntu-latest for now (2026-07-29) — Fence gets its own
-# dedicated, genuinely ephemeral-per-job Hetzner runner pool (0.3.10, decided
-# against sharing doc-e-sign's persistent/non-isolated one — see that item's
-# note), blocked purely on Hetzner capacity for the target box spec. Swap
-# `runs-on` back to `[self-hosted, fencedotdev]` once that pool exists; low
-# CI volume pre-Phase-1 means the GitHub-hosted cost here is negligible in
-# the meantime, and ubuntu-latest's own genuine per-job isolation is strictly
-# safer than the doc-e-sign pool would have been, not just a stopgap.
+# Runs on GitHub-hosted ubuntu-latest — permanently, not as an unfinished
+# migration (fence-build-order.md v1.24, 2026-08-08). This repo (then
+# `contracts`, renamed `packages` 2026-08-21) is the only public repository
+# in the org; the shared self-hosted Hetzner pool (0.3.10) is also used by
+# the KMS-signing-key and DB-credential-holding repos (identity-kyb/
+# issuance/verification), so putting this repo's CI on it would reopen the
+# exact blast-radius risk 0.3.10's dedicated-pool decision exists to
+# prevent. Do not switch `runs-on` to `[self-hosted, fence-runner]` here.
 jobs:
   ci: # zizmor: ignore[excessive-permissions] no permissions: block on this job, not a regression
     runs-on: ubuntu-latest
