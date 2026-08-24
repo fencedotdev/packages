@@ -12,7 +12,7 @@ source "${DIR}/test-helpers.sh"
 
 echo "test-lock.sh"
 
-SESSION_ID="test-lock-session"
+SESSION_ID="test-lock-session-$$"
 LOCK_FILE="/tmp/fence-testlock-${SESSION_ID}.jsonl"
 rm -f "$LOCK_FILE"
 
