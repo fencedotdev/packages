@@ -7,6 +7,12 @@
   "taskCheck": {
     "enabled": true
   },
+  "prdGate": {
+    "enabled": true
+  },
+  "completeTaskGate": {
+    "enabled": true
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -21,6 +27,23 @@
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/task-check.sh log"
           }
         ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/prd-gate.sh mark-passed"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/task-check.sh record"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/test-lock.sh lock"
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -30,6 +53,27 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/block-dangerous-commands.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/complete-task-gate.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/block-dangerous-commands.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/prd-gate.sh gate"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/test-lock.sh gate"
           }
         ]
       }
