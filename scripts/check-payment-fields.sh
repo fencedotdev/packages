@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
 # Mechanizes a backstop for .claude/automatic-code-review/rules.md's Rule 4
 # (no payment-shaped fields outside a repo explicitly scoped for them) —
-# greps files changed since a base ref for the payment-shaped keyword
-# patterns Rule 4 already names. Catches the obvious, unambiguous cases
-# mechanically; does not replace automatic-code-reviewer's judgment on
-# ambiguous ones (e.g. whether a generic `value` field is actually
-# payment-shaped in context) — that nuance stays with the LLM reviewer.
+# greps *newly added lines* in files changed since a base ref for the
+# payment-shaped keyword patterns Rule 4 already names. Catches the
+# obvious, unambiguous cases mechanically; does not replace
+# automatic-code-reviewer's judgment on ambiguous ones (e.g. whether a
+# generic `value` field is actually payment-shaped in context) — that
+# nuance stays with the LLM reviewer.
+#
+# Scoped to added lines only (git diff's own `+` lines), not a whole-file
+# scan — a whole-file scan re-flags every already-reviewed, accepted match
+# in a file (e.g. checklist 4.1.15's own provisional-default `amount`
+# field) on any later PR that merely touches that file for an unrelated
+# reason, which would hard-fail CI on work that introduces nothing new.
+# Found live, 2026-08-24: verify/route.ts's pre-existing, already-reviewed
+# readPlatformFloorThreshold() re-triggered this the first time any PR
+# touched that file after this check was wired into CI.
 
 set -euo pipefail
 
@@ -24,7 +34,8 @@ fi
 FOUND=0
 while IFS= read -r file; do
   [ -f "$file" ] || continue
-  MATCHES=$(grep -nEi "$PATTERNS" "$file" || true)
+  ADDED_LINES=$(git diff "$BASE_REF" -- "$file" | grep -E '^\+[^+]' | sed 's/^+//' || true)
+  MATCHES=$(printf '%s\n' "$ADDED_LINES" | grep -nEi "$PATTERNS" || true)
   if [ -n "$MATCHES" ]; then
     echo "Possible payment-shaped field in ${file} (Rule 4 — no payment fields outside a repo explicitly scoped for them):"
     echo "$MATCHES" | sed 's/^/  /'
