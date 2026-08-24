@@ -62,6 +62,9 @@ Return EXACTLY this structure:
 ### STATUS
 [PASS | FAIL | NEED_INFO]
 
+### ATTEMPT
+[the attempt number supplied by the main agent — echoed back verbatim, not recomputed. Consumed by task-check.sh's telemetry hook (internal/audits/pipeline-metrics.jsonl) — do not omit this line.]
+
 ### CONTEXT
 - Task reference: [from main agent]
 - Task location: [where the requirement was found]

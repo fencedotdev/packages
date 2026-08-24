@@ -6,8 +6,40 @@
 # or markdown changes too.
 # PostToolUse (log mode): records each modified file to a session log.
 # Stop (check mode): forces a task-check subagent pass if files were modified.
+# PostToolUse (record mode, on the Task tool): watches for a completed
+# subagent_type "task-check" call and appends a durable telemetry line
+# (verdict + attempt) to internal/audits/pipeline-metrics.jsonl — the
+# task-check half of closing posture.md's self-flagged "NOT TRACKED" gap
+# (prd-gate.sh's mark-passed mode does the prd-gate half). Same
+# sibling-checkout-topology assumption and graceful skip as that hook.
 
 set -euo pipefail
+
+record_pipeline_metric() {
+  # $1 event name, $2 verdict, $3 attempt, $4 task_ref (may be empty/unknown)
+  local repo_root internal_dir repo_name
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+  [ -z "$repo_root" ] && return 0
+  internal_dir="$(cd "${repo_root}/.." 2>/dev/null && pwd)/internal"
+  if [ ! -d "$internal_dir" ]; then
+    echo "task-check telemetry: no sibling internal/ checkout found — skipping durable log (expected outside the workspace sibling-checkout topology)." >&2
+    return 0
+  fi
+  mkdir -p "${internal_dir}/audits"
+  repo_name="$(basename "$repo_root")"
+  python3 -c "
+import json, sys, time
+print(json.dumps({
+  'ts': int(time.time()),
+  'repo': sys.argv[1],
+  'agent': 'task-check',
+  'event': sys.argv[2],
+  'verdict': sys.argv[3],
+  'attempt': sys.argv[4],
+  'task_ref': sys.argv[5],
+}))
+" "$repo_name" "$1" "$2" "$3" "$4" >> "${internal_dir}/audits/pipeline-metrics.jsonl" 2>/dev/null || true
+}
 
 MODE="${1:-}"
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -24,6 +56,44 @@ except:
   print('true')
 " 2>/dev/null || echo "true"
 }
+
+if [ "$MODE" = "record" ]; then
+  INPUT=$(cat)
+  ENABLED=$(is_enabled)
+  [ "$ENABLED" = "false" ] && exit 0
+
+  SUBAGENT=$(echo "$INPUT" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print(d.get('tool_input',{}).get('subagent_type',''))
+" 2>/dev/null || echo "")
+  [ "$SUBAGENT" != "task-check" ] && exit 0
+
+  OUTPUT_TEXT=$(echo "$INPUT" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+r=d.get('tool_response', d.get('tool_result',''))
+if isinstance(r, dict):
+  print(r.get('content', r.get('output', r.get('text', json.dumps(r)))))
+else:
+  print(r)
+" 2>/dev/null || echo "")
+
+  # Same lesson as prd-gate.sh: the report template puts the header and
+  # verdict on separate lines ("### STATUS" then "PASS"/"FAIL"/"NEED_INFO"
+  # on the next line), not on one line together.
+  VERDICT=$(echo "$OUTPUT_TEXT" | grep -A1 "^### STATUS" | tail -1 | grep -oE "PASS|FAIL|NEED_INFO" | head -1)
+  ATTEMPT=$(echo "$OUTPUT_TEXT" | grep -A1 "^### ATTEMPT" | tail -1 | grep -oE '[0-9]+' | head -1)
+  [ -z "$ATTEMPT" ] && ATTEMPT="unknown"
+  TASK_REF=$(echo "$OUTPUT_TEXT" | grep -m1 "^- Task reference:" | sed -E 's/^- Task reference: *//' | head -c 200)
+  [ -z "$TASK_REF" ] && TASK_REF="unknown"
+
+  if [ -n "$VERDICT" ]; then
+    record_pipeline_metric "task_check_report" "$VERDICT" "$ATTEMPT" "$TASK_REF"
+  fi
+
+  exit 0
+fi
 
 if [ "$MODE" = "log" ]; then
   INPUT=$(cat)

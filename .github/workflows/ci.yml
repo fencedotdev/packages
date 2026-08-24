@@ -125,10 +125,49 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Mechanized backstops for automatic-code-review/rules.md's Rules 3
+      # (banned folder names) and 4 (no payment-shaped fields) — both are
+      # literal/keyword matches, not judgment calls, so they run here rather
+      # than costing a (Haiku-model) automatic-code-reviewer call on every
+      # session. Payment-fields needs a base ref to diff against; on a PR
+      # that's the PR's base commit (fetched shallowly, since checkout
+      # defaults to a single-commit clone), on a direct push to main it's the
+      # previous commit.
+      - name: Banned folder names
+        run: npm run check:banned-folders
+
+      - name: Payment-field check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+            npm run check:payment-fields -- "${{ github.event.pull_request.base.sha }}"
+          else
+            npm run check:payment-fields -- "HEAD~1"
+          fi
+
       # Step 3 (0.3.4): covers every package's tests in one vitest run —
       # root vitest.config.ts globs packages/*/src/**/*.test.ts.
       - name: Test
         run: npm test -- --coverage
+
+  # Regression coverage for .claude/hooks/tools/*.sh — added alongside the
+  # pre-implementation-gate/enforced-pipeline tooling (prd-gate, complete-task,
+  # run-task) specifically because this class of hook has already shipped one
+  # real, silent bug in production (block-dangerous-commands.sh's BSD-grep
+  # flag-parsing bug — see that hook's own header comment). Pure bash, no
+  # npm ci/build dependency, so ubuntu-latest rather than the self-hosted pool
+  # — this repo runs everything on ubuntu-latest anyway (see header comment).
+  hooks-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Hook tests
+        run: bash .claude/hooks/tests/run-hook-tests.sh
 
   # 0.3.7 — CI step 5-alt (library repos, merge-to-main only): publish the
   # package with a version bump, gated on 0.5.6's consumer-driven contract
