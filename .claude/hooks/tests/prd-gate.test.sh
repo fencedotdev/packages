@@ -28,7 +28,8 @@ mkdir -p "${WORKDIR}/some-repo"
 )
 
 METRICS_FILE="${WORKDIR}/internal/audits/pipeline-metrics.jsonl"
-SESSION_LOG="/tmp/fence-prdgate-log-test-session.jsonl"
+TEST_SESSION_ID="test-session-$$"
+SESSION_LOG="/tmp/fence-prdgate-log-${TEST_SESSION_ID}.jsonl"
 rm -f "$SESSION_LOG"
 
 payload_for() {
@@ -36,7 +37,7 @@ payload_for() {
   python3 -c "
 import json, sys
 print(json.dumps({
-  'session_id': 'test-session',
+  'session_id': '${TEST_SESSION_ID}',
   'tool_input': {'subagent_type': sys.argv[1]},
   'tool_response': sys.argv[2],
 }))
