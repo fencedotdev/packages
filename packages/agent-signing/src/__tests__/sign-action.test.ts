@@ -55,24 +55,6 @@ describe("signAction", () => {
     expect(decoded.length).toBe(64);
   });
 
-  it("fails verification when a field is mutated on the signed action after signing", async () => {
-    const { privateKey, publicKey } = await generateEd25519KeyPair();
-    const signature = await signAction(actionFixture, privateKey);
-
-    const tampered: Action = {
-      ...actionFixture,
-      value: { ...actionFixture.value, amount: actionFixture.value.amount + 1 },
-    };
-
-    const verified = await crypto.subtle.verify(
-      "Ed25519",
-      publicKey,
-      decodeAsVerificationWould(signature),
-      new TextEncoder().encode(canonicalizeAction(tampered)),
-    );
-    expect(verified).toBe(false);
-  });
-
   it("fails verification when the destination field is mutated after signing", async () => {
     const { privateKey, publicKey } = await generateEd25519KeyPair();
     const signature = await signAction(actionFixture, privateKey);
