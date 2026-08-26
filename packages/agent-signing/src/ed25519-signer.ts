@@ -1,5 +1,6 @@
 import type { Signer } from "http-message-sig";
 import { AgentSigningError } from "./agent-signing-error.js";
+import { assertEd25519SigningKey } from "./ed25519-signing-key-guard.js";
 
 // Wraps a WebCrypto Ed25519 CryptoKey as http-message-sig's own Signer
 // shape. Re-checked here (not just at import time) since a caller can
@@ -7,9 +8,7 @@ import { AgentSigningError } from "./agent-signing-error.js";
 // fails closed rather than letting a wrong-algorithm key silently produce
 // a signature no verifier will accept as ed25519.
 export function ed25519Signer(privateKey: CryptoKey, keyId: string): Signer {
-  if (privateKey.algorithm.name !== "Ed25519") {
-    throw new AgentSigningError("agent-signing: signing key must be Ed25519");
-  }
+  assertEd25519SigningKey(privateKey);
 
   return {
     keyid: keyId,
