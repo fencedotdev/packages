@@ -111,6 +111,12 @@ jobs:
       # already be built before typecheck can resolve it. This will bite
       # any future package with an intra-monorepo dependency the same
       # way, not just this one pair.
+      #
+      # It did — 2026-08-26, when agent-signing gained a contracts
+      # dependency but sorted before it in `--workspaces`' alphabetical
+      # build order. The root `build` script (package.json) now builds
+      # contracts explicitly first for exactly this reason; don't remove
+      # that ordering assuming `npm run build` alone is safe.
       - name: Build
         run: npm run build
 
@@ -431,9 +437,10 @@ jobs:
   # agent-signing's own publish path — same simpler, ungated shape as
   # credential-verification's above (no consuming repo with a merged
   # consumer contract test yet; add the same three-job gate contracts uses
-  # once one exists, don't leave it ungated out of inertia). No dependency
-  # on @fence.dev/contracts, but built via the full workspace build anyway
-  # for consistency with the pattern above.
+  # once one exists, don't leave it ungated out of inertia). As of 0.2.0
+  # this package does depend on @fence.dev/contracts (signAction()), built
+  # via the full workspace build anyway for consistency with the pattern
+  # above regardless.
   #
   # Bootstrap note, same as contracts'/credential-verification's own
   # history: npm's Trusted Publisher can only be configured against a

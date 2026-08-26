@@ -1,6 +1,6 @@
 {
   "name": "@fence.dev/agent-signing",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Sign an agent's outbound HTTP requests per RFC 9421 / the Web Bot Auth draft's exact wire conventions — the interop signer half of Fence's M·1 agent-signing story. Signer-only: never parses or verifies a third-party signature.",
   "type": "module",
   "engines": {
@@ -31,6 +31,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@fence.dev/contracts": "^0.4.1",
     "http-message-sig": "^0.2.0"
   },
   "devDependencies": {
