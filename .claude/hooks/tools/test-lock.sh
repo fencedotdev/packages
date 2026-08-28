@@ -28,6 +28,42 @@ SESSION_ID=$(echo "$INPUT" | python3 -c "import json,sys; d=json.load(sys.stdin)
 
 LOCK_FILE="/tmp/fence-testlock-${SESSION_ID}.jsonl"
 
+# Normalizes a path to repo-relative form before it's ever stored or
+# compared. A real Edit/Write tool call's file_path is always absolute (the
+# Edit tool's own spec requires it), but test-author's own report template
+# locks a relative-looking path with no instruction to use an absolute one
+# - so without this, the exact-string match in gate mode below would never
+# fire for a real Edit/Write call, in any session, forked or not. This also
+# makes the lock survive a worktree handoff (test-author locking a file in
+# one worktree, implementation editing it in a different one): each side
+# strips its OWN git root at the moment it runs, so both always resolve to
+# the same repo-relative suffix regardless of which absolute worktree path
+# either one started from. Falls back to the original string unchanged if a
+# git root can't be determined, or the path isn't under it - never silently
+# drops a lock, only ever normalizes one.
+normalize_path() {
+  local raw="$1"
+  python3 -c "
+import subprocess, sys, os
+raw = sys.argv[1]
+if not raw or not os.path.isabs(raw):
+    print(raw)
+else:
+    try:
+        root = subprocess.check_output(
+            ['git', 'rev-parse', '--show-toplevel'],
+            text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        print(raw)
+        sys.exit(0)
+    if raw.startswith(root + '/'):
+        print(raw[len(root) + 1:])
+    else:
+        print(raw)
+" "$raw"
+}
+
 if [ "$MODE" = "lock" ]; then
   SUBAGENT=$(echo "$INPUT" | python3 -c "
 import json,sys
@@ -55,7 +91,8 @@ else:
 
   while IFS= read -r path; do
     [ -z "$path" ] && continue
-    echo "{\"event\":\"locked\",\"file\":\"${path}\",\"ts\":$(date +%s)}" >> "$LOCK_FILE"
+    NORM_PATH=$(normalize_path "$path")
+    echo "{\"event\":\"locked\",\"file\":\"${NORM_PATH}\",\"ts\":$(date +%s)}" >> "$LOCK_FILE"
   done <<< "$LOCKED_PATHS"
 
   exit 0
@@ -71,6 +108,7 @@ inp=d.get('tool_input',{})
 print(inp.get('file_path', inp.get('path', '')))
 " 2>/dev/null || echo "")
 [ -z "$FILE_PATH" ] && exit 0
+FILE_PATH=$(normalize_path "$FILE_PATH")
 
 IS_LOCKED=$(python3 -c "
 import json

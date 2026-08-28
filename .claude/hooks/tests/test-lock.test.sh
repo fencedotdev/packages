@@ -104,6 +104,62 @@ print(json.dumps({'session_id': 'a-totally-different-session', 'tool_input': {'f
 OUT=$(echo "$DIFFERENT_SESSION_PAYLOAD" | "$HOOK" gate 2>&1); EXIT=$?
 assert_exit_code 0 "$EXIT" "does not leak locks across sessions"
 
+# Real-world path-format bug: test-author's own report template locks a
+# repo-relative path (e.g. "src/foo.test.ts"), but a real Edit/Write tool
+# call's file_path is always absolute (the Edit tool's own spec requires
+# it) - so the exact-string match must normalize both sides to the same
+# form or the block silently never fires, in any session, forked or not.
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ABSOLUTE_PATH="${REPO_ROOT}/src/widgets/__tests__/widget.test.ts"
+
+OUT=$(echo "$(gate_payload "$ABSOLUTE_PATH")" | "$HOOK" gate 2>&1); EXIT=$?
+assert_exit_code 1 "$EXIT" "gate mode blocks an absolute-path edit to a file locked under its relative path"
+
+# Defensive direction: lock mode itself should also normalize if it's ever
+# handed an absolute path (a different session, so it doesn't collide with
+# the locks already recorded above).
+ABS_SESSION_ID="test-lock-abs-session-$$"
+ABS_LOCK_FILE="/tmp/fence-testlock-${ABS_SESSION_ID}.jsonl"
+rm -f "$ABS_LOCK_FILE"
+
+ABS_LOCK_PAYLOAD=$(python3 -c "
+import json, sys
+print(json.dumps({
+  'session_id': '${ABS_SESSION_ID}',
+  'tool_input': {'subagent_type': 'test-author'},
+  'tool_response': sys.argv[1],
+}))
+" "## TEST-AUTHOR REPORT
+
+### STATUS
+DONE
+
+### ATTEMPT
+1
+
+### CONTEXT
+- Task reference: test item
+
+### SPEC SUMMARY
+covers the happy path
+
+### LOCKED FILES
+- ${ABSOLUTE_PATH}
+
+### RED CONFIRMED
+yes")
+
+OUT=$(echo "$ABS_LOCK_PAYLOAD" | "$HOOK" lock 2>&1); EXIT=$?
+assert_exit_code 0 "$EXIT" "lock mode exits 0 when the report hands it an absolute path"
+
+ABS_GATE_PAYLOAD=$(python3 -c "
+import json
+print(json.dumps({'session_id': '${ABS_SESSION_ID}', 'tool_input': {'file_path': 'src/widgets/__tests__/widget.test.ts'}}))
+")
+OUT=$(echo "$ABS_GATE_PAYLOAD" | "$HOOK" gate 2>&1); EXIT=$?
+assert_exit_code 1 "$EXIT" "gate mode blocks a relative-path edit to a file locked under its absolute path"
+
+rm -f "$ABS_LOCK_FILE"
 rm -f "$LOCK_FILE"
 
 report_and_exit
