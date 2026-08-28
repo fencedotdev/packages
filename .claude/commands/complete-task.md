@@ -5,6 +5,17 @@ argument-hint: [checklist item reference, or a plain task description]
 
 Task reference: $ARGUMENTS
 
+**If you are a forked agent (`subagent_type: "fork"`): you cannot spawn
+subagents.** Steps 6 and 7 below name `automatic-code-reviewer`/`task-check`
+as Task-tool subagents — if you're a fork, apply their rubrics
+(`.claude/agents/automatic-code-reviewer.md`, `.claude/agents/task-check.md`)
+inline yourself instead of calling the Agent/Task tool. See
+`.claude/commands/run-task.md`'s own fork note for why this is written as a
+concrete substitute rather than a "remember not to," and for the known,
+accepted limitation this carries (`task-check`'s own telemetry write to
+`internal/audits/pipeline-metrics.jsonl` doesn't fire under the inline
+path — an accepted gap, not something to work around here).
+
 Run, in order, fixing and re-running on any failure before moving to the next step:
 
 1. `npm run typecheck`

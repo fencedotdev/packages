@@ -9,6 +9,12 @@ Use the Task tool with subagent_type "review-learnings", supplying the PR
 count if given. Display its full report verbatim — do not summarize or
 paraphrase.
 
+**Top-level-session command — never run this from a forked agent
+(`subagent_type: "fork"`), and never resume/redirect a fork into it.** Forks
+cannot spawn subagents (see `.claude/commands/run-task.md`'s own note on
+this), and unlike that command's narrow gate-check agents, `review-learnings`
+is a full analytical pass with no reasonable inline-rubric substitute.
+
 For each `STRENGTHENS`-tagged draft, present it and ask whether to add it to
 `.claude/automatic-code-review/rules.md`. For each `WEAKENS/LOOSENS`-tagged
 draft, present it **individually, on its own**, and ask the same — never
