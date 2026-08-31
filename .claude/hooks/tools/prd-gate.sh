@@ -5,8 +5,8 @@
 # GATE: READY yet. Nags exactly once (soft, exit 2) — a broken marker should
 # never permanently block writes, so any subsequent call in the same session
 # passes silently once one nag has been issued.
-# `mark-passed` mode (PostToolUse on Task): watches for a completed
-# subagent_type "prd-gate" call whose output says GATE: READY, and records it.
+# `mark-passed` mode (SubagentStop): watches for a finished subagent whose
+# agent_type is "prd-gate" and whose output says GATE: READY, and records it.
 # Also appends a durable telemetry line (verdict + attempt, whatever the
 # verdict was) to internal/audits/pipeline-metrics.jsonl — closes posture.md's
 # own self-flagged "NOT TRACKED" gap. Assumes the workspace sibling-checkout
@@ -14,6 +14,19 @@
 # (e.g. a single-repo CI checkout with no internal/ sibling — see
 # continue-task-sweep.yml), skips the durable write with a warning rather
 # than failing the hook.
+#
+# `mark-passed` was originally wired to PostToolUse on the dispatch tool
+# itself, reading subagent_type/tool_response from that event's payload —
+# this silently never fired for an async/background dispatch, since
+# PostToolUse for an async call only ever sees the launch acknowledgment
+# ({"isAsync": true, "status": "async_launched", ...}), never the real
+# completed report — meaning pipeline-metrics.jsonl telemetry (and
+# gate_passed nag-suppression) never actually fired against a real async
+# dispatch. Confirmed via direct instrumentation, 2026-08-30 (see
+# fencedotdev/repo-template#38). SubagentStop is the correct event — it
+# fires once the subagent has actually finished, with `agent_type` and
+# `last_assistant_message` (the real report text) directly on the payload,
+# no tool_response guessing needed.
 
 set -euo pipefail
 
@@ -72,20 +85,14 @@ if [ "$MODE" = "mark-passed" ]; then
   SUBAGENT=$(echo "$INPUT" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
-print(d.get('tool_input',{}).get('subagent_type',''))
+print(d.get('agent_type',''))
 " 2>/dev/null || echo "")
   [ "$SUBAGENT" != "prd-gate" ] && exit 0
 
-  # tool_response's exact shape for a Task-tool call isn't nailed down here —
-  # try the plausible field names and fall back to scanning the whole payload.
   OUTPUT_TEXT=$(echo "$INPUT" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
-r=d.get('tool_response', d.get('tool_result',''))
-if isinstance(r, dict):
-  print(r.get('content', r.get('output', r.get('text', json.dumps(r)))))
-else:
-  print(r)
+print(d.get('last_assistant_message',''))
 " 2>/dev/null || echo "")
 
   # The report template puts the header and verdict on separate lines

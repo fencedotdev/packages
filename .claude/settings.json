@@ -27,9 +27,10 @@
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tools/task-check.sh log"
           }
         ]
-      },
+      }
+    ],
+    "SubagentStop": [
       {
-        "matcher": "Task",
         "hooks": [
           {
             "type": "command",

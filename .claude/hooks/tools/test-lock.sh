@@ -4,8 +4,8 @@
 # satisfy — the structural guardrail behind the AI Refinement Method's Test
 # Author/Implementer split.
 #
-# `lock` mode (PostToolUse on Task): watches for a completed
-# subagent_type "test-author" call whose report says STATUS: DONE, parses
+# `lock` mode (SubagentStop): watches for a finished subagent whose
+# agent_type is "test-author" and whose report says STATUS: DONE, parses
 # its LOCKED FILES list, and records each path as locked for this session.
 # `gate` mode (PreToolUse on Edit|Write): blocks any write to a locked path.
 # Capped, not an unconditional hard block — a buggy lock must not be able to
@@ -17,6 +17,17 @@
 # repo-template/CLAUDE.md's cultural norm against tool-routing around a
 # block, not a technical guarantee (see this repo's CLAUDE.md Security
 # section: "a sandbox-blocked action is a stop signal, not an obstacle").
+#
+# `lock` mode was originally wired to PostToolUse on the dispatch tool
+# itself, reading subagent_type/tool_response from that event's payload —
+# this silently never fired for an async/background dispatch, since
+# PostToolUse for an async call only ever sees the launch acknowledgment
+# ({"isAsync": true, "status": "async_launched", ...}), never the real
+# completed report. Confirmed via direct instrumentation, 2026-08-30 (see
+# fencedotdev/repo-template#38). SubagentStop is the correct event — it
+# fires once the subagent has actually finished, with `agent_type` and
+# `last_assistant_message` (the real report text) directly on the payload,
+# no tool_response guessing needed.
 
 set -euo pipefail
 
@@ -68,18 +79,14 @@ if [ "$MODE" = "lock" ]; then
   SUBAGENT=$(echo "$INPUT" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
-print(d.get('tool_input',{}).get('subagent_type',''))
+print(d.get('agent_type',''))
 " 2>/dev/null || echo "")
   [ "$SUBAGENT" != "test-author" ] && exit 0
 
   OUTPUT_TEXT=$(echo "$INPUT" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
-r=d.get('tool_response', d.get('tool_result',''))
-if isinstance(r, dict):
-  print(r.get('content', r.get('output', r.get('text', json.dumps(r)))))
-else:
-  print(r)
+print(d.get('last_assistant_message',''))
 " 2>/dev/null || echo "")
 
   STATUS=$(echo "$OUTPUT_TEXT" | grep -A1 "^### STATUS" | tail -1 | grep -oE "DONE|BLOCKED|NEED_INFO" | head -1)
