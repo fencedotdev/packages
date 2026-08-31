@@ -34,8 +34,9 @@ payload_for() {
 import json, sys
 print(json.dumps({
   'session_id': 'test-session',
-  'tool_input': {'subagent_type': sys.argv[1]},
-  'tool_response': sys.argv[2],
+  'hook_event_name': 'SubagentStop',
+  'agent_type': sys.argv[1],
+  'last_assistant_message': sys.argv[2],
 }))
 " "$subagent" "$report"
 }

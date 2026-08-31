@@ -6,12 +6,23 @@
 # or markdown changes too.
 # PostToolUse (log mode): records each modified file to a session log.
 # Stop (check mode): forces a task-check subagent pass if files were modified.
-# PostToolUse (record mode, on the Task tool): watches for a completed
-# subagent_type "task-check" call and appends a durable telemetry line
+# SubagentStop (record mode): watches for a finished subagent whose
+# agent_type is "task-check" and appends a durable telemetry line
 # (verdict + attempt) to internal/audits/pipeline-metrics.jsonl — the
 # task-check half of closing posture.md's self-flagged "NOT TRACKED" gap
 # (prd-gate.sh's mark-passed mode does the prd-gate half). Same
 # sibling-checkout-topology assumption and graceful skip as that hook.
+#
+# `record` was originally wired to PostToolUse on the dispatch tool itself,
+# reading subagent_type/tool_response from that event's payload — this
+# silently never fired for an async/background dispatch, since PostToolUse
+# for an async call only ever sees the launch acknowledgment ({"isAsync":
+# true, "status": "async_launched", ...}), never the real completed report.
+# Confirmed via direct instrumentation, 2026-08-30 (see
+# fencedotdev/repo-template#38). SubagentStop is the correct event — it
+# fires once the subagent has actually finished, with `agent_type` and
+# `last_assistant_message` (the real report text) directly on the payload,
+# no tool_response guessing needed.
 
 set -euo pipefail
 
@@ -65,18 +76,14 @@ if [ "$MODE" = "record" ]; then
   SUBAGENT=$(echo "$INPUT" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
-print(d.get('tool_input',{}).get('subagent_type',''))
+print(d.get('agent_type',''))
 " 2>/dev/null || echo "")
   [ "$SUBAGENT" != "task-check" ] && exit 0
 
   OUTPUT_TEXT=$(echo "$INPUT" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
-r=d.get('tool_response', d.get('tool_result',''))
-if isinstance(r, dict):
-  print(r.get('content', r.get('output', r.get('text', json.dumps(r)))))
-else:
-  print(r)
+print(d.get('last_assistant_message',''))
 " 2>/dev/null || echo "")
 
   # Same lesson as prd-gate.sh: the report template puts the header and

@@ -22,8 +22,9 @@ lock_payload() {
 import json, sys
 print(json.dumps({
   'session_id': '${SESSION_ID}',
-  'tool_input': {'subagent_type': 'test-author'},
-  'tool_response': sys.argv[1],
+  'hook_event_name': 'SubagentStop',
+  'agent_type': 'test-author',
+  'last_assistant_message': sys.argv[1],
 }))
 " "$report"
 }
@@ -126,8 +127,9 @@ ABS_LOCK_PAYLOAD=$(python3 -c "
 import json, sys
 print(json.dumps({
   'session_id': '${ABS_SESSION_ID}',
-  'tool_input': {'subagent_type': 'test-author'},
-  'tool_response': sys.argv[1],
+  'hook_event_name': 'SubagentStop',
+  'agent_type': 'test-author',
+  'last_assistant_message': sys.argv[1],
 }))
 " "## TEST-AUTHOR REPORT
 
