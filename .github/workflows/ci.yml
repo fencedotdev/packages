@@ -312,12 +312,29 @@ jobs:
         # GitHub Packages registry — needs the same dedicated classic PAT
         # those repos' own ci.yml already uses for this (see
         # internal-packages' CLAUDE.md: fine-grained PATs don't work against
-        # GitHub Packages' npm registry, confirmed directly). Harmless to
-        # pass for the other four consumers, whose .npmrc never references
-        # it. Same precedent as this repo's own "Wire
-        # INTERNAL_PACKAGES_READ_TOKEN into identity-kyb's npm ci step" fix.
+        # GitHub Packages' npm registry, confirmed directly). Same precedent
+        # as this repo's own "Wire INTERNAL_PACKAGES_READ_TOKEN into
+        # identity-kyb's npm ci step" fix.
+        #
+        # Scoped to only the three matrix legs whose .npmrc actually
+        # references it — this is only a public-repo/heightened-risk
+        # boundary (this repo's own CLAUDE.md), and npm ci runs install
+        # scripts for every dependency in a checked-out consumer's own
+        # tree, so the other four consumers' transitive dependencies never
+        # need this classic PAT available in their process environment.
+        #
+        # The >- fold below does NOT actually collapse these lines onto
+        # one — they're over-indented relative to the first content line,
+        # which YAML's folding rule exempts from folding — but that's
+        # harmless: the Actions expression lexer treats an embedded
+        # newline as ordinary whitespace between tokens, same as a space.
+        # Don't "simplify" this back to a single line assuming the fold
+        # wasn't doing anything; it parses correctly as written.
         env:
-          INTERNAL_PACKAGES_READ_TOKEN: ${{ secrets.INTERNAL_PACKAGES_READ_TOKEN }}
+          INTERNAL_PACKAGES_READ_TOKEN: >-
+            ${{ contains(fromJSON('["identity-kyb", "verification", "scope-policy"]'), matrix.repo)
+              && secrets.INTERNAL_PACKAGES_READ_TOKEN
+              || '' }}
         run: |
           if [ ! -f src/__tests__/contracts.test.ts ]; then
             echo "::notice::${{ matrix.repo }} has no consumer contract test on main yet (0.5.6 not merged there) — nothing to verify"
