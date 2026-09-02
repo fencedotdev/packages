@@ -322,6 +322,14 @@ jobs:
         # scripts for every dependency in a checked-out consumer's own
         # tree, so the other four consumers' transitive dependencies never
         # need this classic PAT available in their process environment.
+        #
+        # The >- fold below does NOT actually collapse these lines onto
+        # one — they're over-indented relative to the first content line,
+        # which YAML's folding rule exempts from folding — but that's
+        # harmless: the Actions expression lexer treats an embedded
+        # newline as ordinary whitespace between tokens, same as a space.
+        # Don't "simplify" this back to a single line assuming the fold
+        # wasn't doing anything; it parses correctly as written.
         env:
           INTERNAL_PACKAGES_READ_TOKEN: >-
             ${{ contains(fromJSON('["identity-kyb", "verification", "scope-policy"]'), matrix.repo)
