@@ -307,6 +307,17 @@ jobs:
 
       - name: Run ${{ matrix.repo }}'s consumer contract test against the new build
         working-directory: consumer
+        # identity-kyb/verification/scope-policy's own .npmrc resolves one
+        # or more @fencedotdev/* packages from the private internal-packages
+        # GitHub Packages registry — needs the same dedicated classic PAT
+        # those repos' own ci.yml already uses for this (see
+        # internal-packages' CLAUDE.md: fine-grained PATs don't work against
+        # GitHub Packages' npm registry, confirmed directly). Harmless to
+        # pass for the other four consumers, whose .npmrc never references
+        # it. Same precedent as this repo's own "Wire
+        # INTERNAL_PACKAGES_READ_TOKEN into identity-kyb's npm ci step" fix.
+        env:
+          INTERNAL_PACKAGES_READ_TOKEN: ${{ secrets.INTERNAL_PACKAGES_READ_TOKEN }}
         run: |
           if [ ! -f src/__tests__/contracts.test.ts ]; then
             echo "::notice::${{ matrix.repo }} has no consumer contract test on main yet (0.5.6 not merged there) — nothing to verify"
