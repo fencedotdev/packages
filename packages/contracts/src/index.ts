@@ -1,5 +1,7 @@
 export type { AssuranceLevel } from "./assurance-level.js";
 export { AssuranceLevelCopy, AssuranceLevelSchema } from "./assurance-level.js";
+export type { ApiError, EnvironmentMismatchErrorBody } from "./error.js";
+export { ApiErrorSchema, EnvironmentMismatchErrorSchema } from "./error.js";
 export { Gate2ConsentCopy } from "./gate2-consent.js";
 export type { Environment } from "./environment.js";
 export { EnvironmentSchema } from "./environment.js";

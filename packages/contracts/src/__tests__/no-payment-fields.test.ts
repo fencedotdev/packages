@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
+import { ApiErrorSchema, EnvironmentMismatchErrorSchema } from "../error.js";
 import { MandateSchema } from "../mandate.js";
 import { PassportSchema } from "../passport.js";
 import { BitstringStatusListCredentialSchema } from "../status-list.js";
@@ -12,6 +13,11 @@ import { VerifyRequestSchema } from "../verify-request.js";
 // payment-shaped — amounts tied to settlement, card/wallet references,
 // anything beyond the generic limits/value shapes already in M·2/M·3 —
 // until the brief's Prong 2 is explicitly and separately scoped.
+//
+// 1.7.6a adds ApiErrorSchema/EnvironmentMismatchErrorSchema to this same
+// enforcement list, per that item's own prd-gate recommendation — every
+// contract shape in this package gets this coverage, not just the
+// original four/five.
 
 const BANNED_FIELD_NAMES = [
   "funded",
@@ -58,9 +64,11 @@ const ALL_SCHEMAS = {
   verifyRequest: VerifyRequestSchema,
   verifyDecision: VerifyDecisionSchema,
   statusListCredential: BitstringStatusListCredentialSchema,
+  apiError: ApiErrorSchema,
+  environmentMismatchError: EnvironmentMismatchErrorSchema,
 } as const;
 
-describe("no payment-shaped fields exist anywhere in the four contract shapes", () => {
+describe("no payment-shaped fields exist anywhere in this package's contract shapes", () => {
   it.each(Object.entries(ALL_SCHEMAS))("%s has no banned field name", (_name, schema) => {
     const fieldNames = new Set<string>();
     collectFieldNames(z.toJSONSchema(schema), fieldNames);
