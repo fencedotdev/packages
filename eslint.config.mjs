@@ -4,7 +4,7 @@ import security from "eslint-plugin-security";
 
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "node_modules/**", "coverage/**"],
+    ignores: ["**/dist/**", "node_modules/**", "coverage/**", ".claude/worktrees/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
