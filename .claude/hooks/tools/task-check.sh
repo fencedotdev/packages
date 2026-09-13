@@ -28,8 +28,17 @@ set -euo pipefail
 
 record_pipeline_metric() {
   # $1 event name, $2 verdict, $3 attempt, $4 task_ref (may be empty/unknown)
-  local repo_root internal_dir repo_name
-  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+  local git_common_dir repo_root internal_dir repo_name
+  # Use --git-common-dir (not --show-toplevel) so this resolves to the main
+  # checkout even when invoked from inside a linked worktree (e.g. a Phase 2
+  # implementation-only /run-task fork under isolation:"worktree") —
+  # --show-toplevel returns the worktree's own path there, which sits nested
+  # under the main repo's own .claude/worktrees/, breaking the "internal/ is
+  # a sibling of repo_root" derivation below and silently dropping all
+  # worktree telemetry.
+  git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || echo "")"
+  [ -z "$git_common_dir" ] && return 0
+  repo_root="$(cd "$git_common_dir" 2>/dev/null && cd .. && pwd || echo "")"
   [ -z "$repo_root" ] && return 0
   internal_dir="$(cd "${repo_root}/.." 2>/dev/null && pwd)/internal"
   if [ ! -d "$internal_dir" ]; then

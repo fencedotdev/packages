@@ -137,4 +137,40 @@ assert_exit_code 0 "$EXIT" "does not error when no sibling internal/ checkout ex
 rm -rf "$NOINTERNAL_DIR"
 rm -f "$SESSION_LOG"
 
+# Regression test: a real bug (fixed alongside this test) where invoking the
+# hook from inside a linked worktree (e.g. plan-next.md's isolation:"worktree"
+# forks) resolved repo_root via --show-toplevel to the worktree's own nested
+# path, breaking the "internal/ is a sibling of repo_root" derivation and
+# silently skipping the durable write for every worktree-run item.
+# Nested under the repo's own .claude/worktrees/, matching plan-next.md's
+# real layout — a worktree sibling of the repo itself would not reproduce
+# the bug (its "cd repo_root/.." would coincidentally still land beside
+# internal/ in this test's own directory layout).
+WORKTREE_DIR="${WORKDIR}/some-repo/.claude/worktrees/prd-gate-wt-test"
+(cd "${WORKDIR}/some-repo" && git worktree add -q -b prd-gate-wt-test "$WORKTREE_DIR") >/dev/null 2>&1
+
+LINES_BEFORE_WT=$(wc -l < "$METRICS_FILE")
+PAYLOAD_WT=$(payload_for "prd-gate" "$READY_REPORT")
+OUT=$(echo "$PAYLOAD_WT" | (cd "$WORKTREE_DIR" && "$HOOK" mark-passed) 2>&1); EXIT=$?
+assert_exit_code 0 "$EXIT" "mark-passed exits 0 when invoked from inside a linked worktree"
+
+LINES_AFTER_WT=$(wc -l < "$METRICS_FILE")
+if [ "$LINES_AFTER_WT" -gt "$LINES_BEFORE_WT" ]; then
+  echo "  ok: telemetry from inside a linked worktree still reaches the main checkout's sibling internal/ (not silently dropped)"
+else
+  echo "  FAIL: worktree-invoked mark-passed did not append to ${METRICS_FILE} (regression of the worktree path-resolution bug)"
+  TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+TESTS_RUN=$((TESTS_RUN + 1))
+
+if tail -1 "$METRICS_FILE" | grep -q '"repo": "some-repo"'; then
+  echo "  ok: repo name is derived from the main checkout, not the worktree's own directory name"
+else
+  echo "  FAIL: expected repo name 'some-repo' (main checkout basename), got a worktree-derived name instead"
+  TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+TESTS_RUN=$((TESTS_RUN + 1))
+
+(cd "${WORKDIR}/some-repo" && git worktree remove -q --force "$WORKTREE_DIR") >/dev/null 2>&1 || true
+
 report_and_exit
