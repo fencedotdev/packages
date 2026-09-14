@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@fence.dev/contracts": "^0.4.1",
-    "http-message-sig": "^0.3.0"
+    "http-message-sig": "^0.2.0"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
