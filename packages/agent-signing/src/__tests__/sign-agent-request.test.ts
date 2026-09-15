@@ -44,7 +44,7 @@ describe("signAgentRequest", () => {
     expect(request.headers["Signature-Agent"]).toBe("https://11111111-1111-1111-1111-111111111111.agents.fence.dev");
   });
 
-  it("carries the web-bot-auth tag, ed25519 alg, and the given nonce in Signature-Input", async () => {
+  it("carries the web-bot-auth tag, ed25519 alg, the given nonce, and the given keyid in Signature-Input", async () => {
     const signingKey = await generateSigningKey();
     const request = newRequest();
 
@@ -53,6 +53,13 @@ describe("signAgentRequest", () => {
     expect(headers["Signature-Input"]).toEqual(expect.stringContaining('tag="web-bot-auth"'));
     expect(headers["Signature-Input"]).toEqual(expect.stringContaining('alg="ed25519"'));
     expect(headers["Signature-Input"]).toEqual(expect.stringContaining('nonce="test-nonce-1"'));
+    // http-message-sig 0.2.0 -> 0.3.0 moved keyid off the Signer and onto
+    // createSignature()'s own `parameters` — the single easiest field to
+    // drop silently in that rewrite, and the one @fence.dev/agent-
+    // signature-verify's own resolveVerifier() hard-rejects a signature
+    // over (throws "missing keyid" on empty/absent), so it's asserted here
+    // explicitly rather than left to incidental coverage.
+    expect(headers["Signature-Input"]).toEqual(expect.stringContaining('keyid="agent-signing-key-1"'));
     expect(headers["Signature-Input"]).toEqual(expect.stringContaining("created=1787486400"));
   });
 
