@@ -7,15 +7,28 @@ import { assertEd25519SigningKey } from "./ed25519-signing-key-guard.js";
 // construct signAgentRequest's options directly with any CryptoKey —
 // fails closed rather than letting a wrong-algorithm key silently produce
 // a signature no verifier will accept as ed25519.
-export function ed25519Signer(privateKey: CryptoKey, keyId: string): Signer {
+//
+// Migrated for http-message-sig 0.2.0 -> 0.3.0: the Signer shape dropped
+// `keyid`/`alg` entirely (those are now caller-supplied `parameters` on
+// createSignature() itself, see sign-agent-request.ts) and renamed `alg`
+// to `algorithm`; `sign()` now takes the already-encoded Uint8Array
+// signature base directly rather than a raw string, so this module no
+// longer owns the TextEncoder step.
+export function ed25519Signer(privateKey: CryptoKey): Signer {
   assertEd25519SigningKey(privateKey);
 
   return {
-    keyid: keyId,
-    alg: "ed25519",
-    async sign(data: string): Promise<Uint8Array> {
+    algorithm: "ed25519",
+    async sign(data: Uint8Array): Promise<Uint8Array> {
       try {
-        const signature = await crypto.subtle.sign("Ed25519", privateKey, new TextEncoder().encode(data));
+        // http-message-sig's Signer.sign() types `data` as
+        // Uint8Array<ArrayBufferLike> (which includes SharedArrayBuffer),
+        // narrower than WebCrypto's own BufferSource — copied into a fresh
+        // Uint8Array<ArrayBuffer> here rather than asserted, since a real
+        // SharedArrayBuffer-backed input would otherwise silently pass a
+        // type check it can't actually satisfy at the WebCrypto boundary.
+        const dataBytes = new Uint8Array(data);
+        const signature = await crypto.subtle.sign("Ed25519", privateKey, dataBytes);
         return new Uint8Array(signature);
       } catch {
         throw new AgentSigningError("agent-signing: signing failed");

@@ -1,5 +1,5 @@
-import type { RequestLike } from "http-message-sig";
-import { signatureHeaders } from "http-message-sig";
+import type { FieldOccurrence, RequestDescriptor } from "http-message-sig";
+import { createSignature } from "http-message-sig";
 import { AgentSigningError } from "./agent-signing-error.js";
 import { ed25519Signer } from "./ed25519-signer.js";
 
@@ -10,6 +10,7 @@ import { ed25519Signer } from "./ed25519-signer.js";
 // being interoperable with a generic Web Bot Auth verifier, which is the
 // entire point of this package.
 const WEB_BOT_AUTH_TAG = "web-bot-auth";
+const REQUIRED_ALGORITHM = "ed25519";
 const COVERED_COMPONENTS = ["@authority", "signature-agent"];
 const DEFAULT_EXPIRES_IN_SECONDS = 300;
 const MILLISECONDS_PER_SECOND = 1000;
@@ -37,45 +38,81 @@ export interface AgentSignatureHeaders {
   readonly "Signature-Agent": string;
 }
 
+// http-message-sig 0.2.0 exported RequestLike/HeaderValue directly (a
+// Headers-like get()/set() map, or a plain Record<string, string | string[]
+// | {toString()}>) — 0.3.0 has no equivalent public type at all (its own
+// message shape is a real Fetch API Request, or a RequestDescriptor with a
+// pre-built `fields` array, neither of which supports "mutate this header
+// in place" the way this function's callers rely on). Redefined locally
+// here, deliberately narrower than 0.2.0's own union (string values only,
+// no array/toString() header-value variants) — the two shapes below are
+// the only ones this package's own tests, and every real caller in this
+// workspace (confirmed by a workspace-wide grep: nothing imports
+// RequestLike/HeaderValue from this package today), have ever used.
+export type HeaderValue = string;
+export interface HeadersMapLike {
+  get(name: string): string | null;
+  set(name: string, value: string): void;
+}
+export interface RequestLike {
+  readonly method: string;
+  readonly url: string;
+  readonly headers: Record<string, HeaderValue> | HeadersMapLike;
+}
+
 // Signs `request` in place (the Signature-Agent header is written onto it)
 // and returns the three headers a caller sends alongside it. Fails closed
 // with AgentSigningError on every failure mode — a wrong-algorithm key, a
 // signing failure, or any unexpected error from http-message-sig itself —
 // never surfacing signing material in the thrown error.
 export async function signAgentRequest(request: RequestLike, options: SignAgentRequestOptions): Promise<AgentSignatureHeaders> {
-  const signer = ed25519Signer(options.signingKey, options.keyId);
+  const signer = ed25519Signer(options.signingKey);
   setHeader(request.headers, "Signature-Agent", options.signatureAgent);
 
   const created = options.now ?? new Date();
   const expiresInSeconds = options.expiresInSeconds ?? DEFAULT_EXPIRES_IN_SECONDS;
   const expires = new Date(created.getTime() + expiresInSeconds * MILLISECONDS_PER_SECOND);
 
+  // 0.3.0's own RequestDescriptor wants a fully pre-built `fields` array
+  // rather than something to read headers off of live — "signature-agent"
+  // is the only field either covered component actually needs (@authority
+  // is derived from targetUri), so that's the only entry built here.
+  const descriptor: RequestDescriptor = {
+    kind: "request",
+    method: request.method,
+    targetUri: request.url,
+    fields: [{ name: "signature-agent", value: options.signatureAgent }] satisfies FieldOccurrence[],
+  };
+
   try {
-    const headers = await signatureHeaders(request, {
+    const fields = await createSignature(descriptor, {
       components: COVERED_COMPONENTS,
-      tag: WEB_BOT_AUTH_TAG,
-      created,
-      expires,
-      nonce: options.nonce,
+      parameters: {
+        created: Math.floor(created.getTime() / MILLISECONDS_PER_SECOND),
+        expires: Math.floor(expires.getTime() / MILLISECONDS_PER_SECOND),
+        nonce: options.nonce,
+        keyid: options.keyId,
+        alg: REQUIRED_ALGORITHM,
+        tag: WEB_BOT_AUTH_TAG,
+      },
       signer,
     });
-    return { ...headers, "Signature-Agent": options.signatureAgent };
+    return {
+      Signature: fields.signature,
+      "Signature-Input": fields.signatureInput,
+      "Signature-Agent": options.signatureAgent,
+    };
   } catch (cause) {
     if (cause instanceof AgentSigningError) throw cause;
     throw new AgentSigningError("agent-signing: failed to produce signature headers");
   }
 }
 
-// http-message-sig's own `HeadersMap` type isn't exported from its public
-// API — narrowed structurally here instead of importing it by name.
-type RequestHeaders = RequestLike["headers"];
-type HeadersMapLike = Extract<RequestHeaders, { set: (name: string, value: string) => void }>;
-
-function isHeadersMap(headers: RequestHeaders): headers is HeadersMapLike {
+function isHeadersMap(headers: RequestLike["headers"]): headers is HeadersMapLike {
   return "set" in headers && typeof headers.set === "function";
 }
 
-function setHeader(headers: RequestHeaders, name: string, value: string): void {
+function setHeader(headers: RequestLike["headers"], name: string, value: string): void {
   if (isHeadersMap(headers)) {
     headers.set(name, value);
     return;
