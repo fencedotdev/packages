@@ -38,7 +38,10 @@ echo "$COMMAND" | grep -q "git commit" || exit 0
 [ "$(is_enabled)" = "false" ] && exit 0
 
 cd "$(git rev-parse --show-toplevel)" 2>/dev/null || exit 0
-MARKER=".git/.fence-complete-task-passed"
+# See complete-task-mark-passed.sh's comment: --git-dir, not a hardcoded
+# ".git/", since ".git" is a FILE (not a directory) at a linked worktree's
+# root.
+MARKER="$(git rev-parse --git-dir)/.fence-complete-task-passed"
 
 if [ ! -f "$MARKER" ]; then
   echo "Blocked: no verified pipeline pass on record. Run /complete-task (typecheck+lint+test+build+code-review+task-check) before committing." >&2
