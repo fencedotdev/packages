@@ -32,9 +32,9 @@
   },
   "dependencies": {
     "@fence.dev/contracts": "^0.4.1",
-    "jose": "^6.2.10"
+    "jose": "^6.2.12"
   },
   "devDependencies": {
-    "@types/node": "^26.4.0"
+    "@types/node": "^26.5.0"
   }
 }
