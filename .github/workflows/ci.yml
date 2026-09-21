@@ -520,3 +520,46 @@ jobs:
       - name: Publish to npm
         if: steps.check.outputs.already_published == 'false'
         run: npm publish --provenance --workspace=packages/agent-signing
+
+  # Mechanized backstop for CLAUDE.md's non-negotiable "no AI attribution in
+  # commits or PRs" rule — added 2026-09-21 after the rule was violated
+  # twice in one desnarl/web + crossrepo-graph session despite being
+  # explicit and in context both times. Pure git+bash, no npm/build
+  # dependency, so ubuntu-latest (this repo's whole CI already runs there —
+  # see this file's own header comment on why, this job doesn't change that).
+  #
+  # Two triggers, because they catch genuinely different failure modes.
+  # `pull_request` blocks a bad commit from merging via rebase/merge-commit
+  # strategies, and is the general first line of defense. `push` to main
+  # catches the one case a pre-merge check structurally cannot: GitHub's
+  # squash-merge commit message is generated server-side DURING the merge
+  # itself, and can resurrect a Co-Authored-By trailer from a commit
+  # already amended clean on the branch — confirmed directly against a
+  # real incident: a force-pushed, verified-clean PR branch on a sibling
+  # repo still produced an attributed squash-merge commit. The push:main
+  # job can't block a merge that's already happened, but it fails loudly
+  # and immediately, and needs no separate alerting — notify-on-failure.yml
+  # already turns any CI failure on main into a Discord post.
+  no-ai-attribution:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check commits for AI attribution
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="${{ github.event.pull_request.base.sha }}..${{ github.sha }}"
+          else
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              RANGE="${{ github.sha }}~1..${{ github.sha }}"
+            else
+              RANGE="${BEFORE}..${{ github.sha }}"
+            fi
+          fi
+          bash scripts/check-no-ai-attribution.sh "$RANGE"
