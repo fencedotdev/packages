@@ -39,8 +39,21 @@ jobs:
         run: npm ci
 
       # Step 1 (0.3.2): fail on any high/critical vulnerability, before any build step.
+      # Retried up to 3x, 10s apart: registry.npmjs.org's bulk-advisory
+      # endpoint intermittently drops the TLS handshake mid-connect ("Client
+      # network socket disconnected before secure TLS connection was
+      # established") — a transient egress flake, not a real audit failure,
+      # confirmed recurring across multiple repos/runs 2026-09-15. Retrying
+      # tolerates that without weakening the actual audit: a genuine
+      # high/critical finding still fails the build on every attempt.
       - name: npm audit
-        run: npm audit --audit-level=high
+        run: |
+          for i in 1 2 3; do
+            npm audit --audit-level=high && break
+            if [ "$i" -eq 3 ]; then exit 1; fi
+            echo "npm audit attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
 
       # New, v1.7 (0.3.2a): Semgrep SAST — named in the stack (App. G) but previously
       # never actually wired into CI. semgrep/semgrep-action itself has been
